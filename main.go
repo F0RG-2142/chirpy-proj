@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"html/template"
 	"net/http"
 	"sync/atomic"
 )
@@ -18,8 +18,8 @@ func main() {
 	mux.Handle("/app/", http.StripPrefix("/app/", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./")))))
 	mux.Handle("/assets", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./"))))
 	mux.Handle("GET /api/healthz", apiCfg.middlewareMetricsInc(http.HandlerFunc(readiness)))
-	mux.Handle("GET /api/metrics", apiCfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
-	mux.Handle("POST /api/reset", http.HandlerFunc(reset))
+	mux.Handle("GET /admin/metrics", apiCfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
+	mux.Handle("POST /admin/reset", http.HandlerFunc(reset))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	server.ListenAndServe()
@@ -39,20 +39,28 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func metrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	hits := apiCfg.fileserverHits.Load()
+	hits := int(apiCfg.fileserverHits.Load())
 	w.WriteHeader(200)
-	body, err := io.ReadAll(r.Body)
+	tmpl, err := template.ParseFiles("./metrics.html")
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		fmt.Println("Error loading template:", err)
 		return
 	}
-	body = append(body, []byte(fmt.Sprintf("Hits: %d", hits))...)
-	w.Write(body)
+	data := struct {
+		Count int
+	}{
+		Count: hits,
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+		return
+	}
 }
 
 func readiness(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(200)
 	w.Write([]byte(""))
 }
