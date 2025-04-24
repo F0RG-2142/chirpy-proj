@@ -65,7 +65,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		respBody := returnValues{
 			Err: "Chirp is too long",
 		}
-		data, err := json.Marshal(respBody.Err)
+		data, err := json.Marshal(respBody)
 		if err != nil {
 			log.Printf("Error marshalling JSON: %s", err)
 			w.WriteHeader(500)
@@ -78,7 +78,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 	respBody := returnValues{
 		Valid: true,
 	}
-	data, err := json.Marshal(respBody.Valid)
+	data, err := json.Marshal(respBody)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(500)
