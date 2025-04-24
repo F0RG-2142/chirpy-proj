@@ -43,47 +43,49 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 
 func validate_chirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	type chirp struct {
+	type req struct {
 		Body string `json:"body"`
 	}
-	type return_val struct {
-		Body  string `json:"body"`
-		Err   string `json:"error"`
-		Valid string `json:"valid"`
-	}
-
 	decoder := json.NewDecoder(r.Body)
-	chirp_body := chirp{}
-	err := decoder.Decode(&chirp_body)
+	defer r.Body.Close()
+	request := req{}
+	err := decoder.Decode(&request)
+	fmt.Println(request)
 	if err != nil {
-		log.Printf("Error decoding parameters: %v", err)
+		log.Printf("Error decoding request: %v", err)
 		w.WriteHeader(500)
 		return
 	}
-	if len(chirp_body.Body) > 140 {
-		respBody := return_val{
-			Body: chirp_body.Body,
+	type returnValues struct {
+		Err   string `json:"error"`
+		Valid bool   `json:"valid"`
+	}
+	//If body to long (>140)
+	if len(request.Body) > 140 {
+		respBody := returnValues{
+			Err: "Chirp is too long",
 		}
-		data, err := json.Marshal(respBody)
+		data, err := json.Marshal(respBody.Err)
 		if err != nil {
-			log.Printf("Error marshaling data: %v", err)
+			log.Printf("Error marshalling JSON: %s", err)
 			w.WriteHeader(500)
 			return
 		}
-		w.WriteHeader(200)
+		w.WriteHeader(400)
 		w.Write(data)
 		return
 	}
-	respBody := return_val{Err: "Chirp is too long"}
-	data, err := json.Marshal(respBody)
+	respBody := returnValues{
+		Valid: true,
+	}
+	data, err := json.Marshal(respBody.Valid)
 	if err != nil {
-		log.Printf("Error marshaling data: %v", err)
+		log.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(500)
 		return
 	}
-	w.WriteHeader(500)
+	w.WriteHeader(200)
 	w.Write(data)
-
 }
 
 func metrics(w http.ResponseWriter, r *http.Request) {
