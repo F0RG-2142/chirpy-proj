@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -57,6 +58,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type returnValues struct {
+		Body  string `json:"body"`
 		Err   string `json:"error"`
 		Valid bool   `json:"valid"`
 	}
@@ -75,7 +77,16 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 		return
 	}
+	//Clean profanities
+	var cleaned_body string
+	if strings.Contains(request.Body, "kerfuffle") || strings.Contains(request.Body, "sharbert") || strings.Contains(request.Body, "fornax") {
+		cleaned_body = request.Body
+		cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
+		cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
+		cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
+	}
 	respBody := returnValues{
+		Body:  cleaned_body,
 		Valid: true,
 	}
 	data, err := json.Marshal(respBody)
