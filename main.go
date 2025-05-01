@@ -62,7 +62,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		Err   string `json:"error"`
 		Valid bool   `json:"valid"`
 	}
-	//If body to long (>140)
+	//If body too long (>140) return error
 	if len(request.Body) > 140 {
 		respBody := returnValues{
 			Err: "Chirp is too long",
@@ -77,7 +77,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 		return
 	}
-	//Clean profanities
+	//Clean profanities 1.0
 	var cleaned_body string
 	if strings.Contains(request.Body, "kerfuffle") || strings.Contains(request.Body, "sharbert") || strings.Contains(request.Body, "fornax") {
 		cleaned_body = request.Body
