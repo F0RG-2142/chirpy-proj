@@ -1,22 +1,34 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
+
+	"github.com/F0RG-2142/chirpy-proj/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	queries        *database.Queries
 }
 
 var apiCfg apiConfig
 
 func main() {
+
+	dbURL := os.Getenv("DB_URL")
+	if db, err := sql.Open("postgres", dbURL); err != nil {
+		apiCfg.queries = database.New(db)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/app/", http.StripPrefix("/app/", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./")))))
 	mux.Handle("/assets", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./"))))
