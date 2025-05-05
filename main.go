@@ -42,7 +42,7 @@ func main() {
 	mux.Handle("GET /api/healthz", Cfg.middlewareMetricsInc(http.HandlerFunc(readiness)))
 	mux.Handle("GET /admin/metrics", Cfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
 	mux.Handle("POST /admin/reset", http.HandlerFunc(reset))
-	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validate_chirp))
+	mux.Handle("POST /api/chirps", http.HandlerFunc(chirp))
 	mux.Handle("POST /api/users", http.HandlerFunc(newUser))
 	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
 
@@ -112,10 +112,11 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func validate_chirp(w http.ResponseWriter, r *http.Request) {
+func chirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var req struct {
 		Body string `json:"body"`
+		userId string `json:"user_id":`
 	}
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
