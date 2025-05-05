@@ -12,37 +12,95 @@ import (
 	"sync/atomic"
 
 	"github.com/F0RG-2142/chirpy-proj/internal/database"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	queries        *database.Queries
+	db             *database.Queries
+	platform       string
 }
 
-var apiCfg apiConfig
+var Cfg apiConfig
 
 func main() {
-
+	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
-	if db, err := sql.Open("postgres", dbURL); err != nil {
-		apiCfg.queries = database.New(db)
+	platform := os.Getenv("PLATFORM")
+	db, _ := sql.Open("postgres", dbURL)
+	defer db.Close()
+	if err := db.Ping(); err != nil {
+		log.Fatal("Failed to ping database:", err)
 	}
+	Cfg.db = database.New(db)
+	Cfg.platform = platform
 
 	mux := http.NewServeMux()
-	mux.Handle("/app/", http.StripPrefix("/app/", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./")))))
-	mux.Handle("/assets", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("./"))))
-	mux.Handle("GET /api/healthz", apiCfg.middlewareMetricsInc(http.HandlerFunc(readiness)))
-	mux.Handle("GET /admin/metrics", apiCfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
+	mux.Handle("/app/", http.StripPrefix("/app/", Cfg.middlewareMetricsInc(http.FileServer(http.Dir("./")))))
+	mux.Handle("/assets", Cfg.middlewareMetricsInc(http.FileServer(http.Dir("./"))))
+	mux.Handle("GET /api/healthz", Cfg.middlewareMetricsInc(http.HandlerFunc(readiness)))
+	mux.Handle("GET /admin/metrics", Cfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
 	mux.Handle("POST /admin/reset", http.HandlerFunc(reset))
 	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validate_chirp))
+	mux.Handle("POST /api/users", http.HandlerFunc(newUser))
+	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	server.ListenAndServe()
 }
 
+func resetDb(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if Cfg.platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+	}
+	Cfg.db.DeleteAllUsers(r.Context())
+}
+
+func newUser(w http.ResponseWriter, r *http.Request) {
+	//decode request body
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	//validate email
+	if req.Email == "" {
+		http.Error(w, `{"error":"Email is required"}`, http.StatusBadRequest)
+		return
+	}
+	//check if db is initialized
+	if Cfg.db == nil {
+		log.Println("Database not initialized")
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	//Create user and resepond with created user
+	user, err := Cfg.db.CreateUser(r.Context(), sql.NullString{String: req.Email, Valid: true})
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		http.Error(w, `{"error":"Failed to create user"}`, http.StatusInternalServerError)
+		return
+	}
+	userJSON, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("Error marshalling user to JSON: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write(userJSON)
+}
+
 func reset(w http.ResponseWriter, r *http.Request) {
-	apiCfg.fileserverHits.Store(0)
+	Cfg.fileserverHits.Store(0)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Fileserver hits reset to 0"))
 }
@@ -56,14 +114,13 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 
 func validate_chirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	type req struct {
+	var req struct {
 		Body string `json:"body"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
-	request := req{}
-	err := decoder.Decode(&request)
-	fmt.Println(request)
+	err := decoder.Decode(&req)
+	fmt.Println(req)
 	if err != nil {
 		log.Printf("Error decoding request: %v", err)
 		w.WriteHeader(500)
@@ -75,7 +132,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 		Valid bool   `json:"valid"`
 	}
 	//If body too long (>140) return error
-	if len(request.Body) > 140 {
+	if len(req.Body) > 140 {
 		respBody := returnValues{
 			Err: "Chirp is too long",
 		}
@@ -91,8 +148,8 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 	}
 	//Clean profanities 1.0
 	var cleaned_body string
-	if strings.Contains(request.Body, "kerfuffle") || strings.Contains(request.Body, "sharbert") || strings.Contains(request.Body, "fornax") {
-		cleaned_body = request.Body
+	if strings.Contains(req.Body, "kerfuffle") || strings.Contains(req.Body, "sharbert") || strings.Contains(req.Body, "fornax") {
+		cleaned_body = req.Body
 		cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
 		cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
 		cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
@@ -112,7 +169,7 @@ func validate_chirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func metrics(w http.ResponseWriter, r *http.Request) {
-	hits := int(apiCfg.fileserverHits.Load())
+	hits := int(Cfg.fileserverHits.Load())
 	w.WriteHeader(200)
 	tmpl, err := template.ParseFiles("./metrics.html")
 	if err != nil {
