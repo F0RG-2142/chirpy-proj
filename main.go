@@ -156,7 +156,7 @@ func chirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//Clean profanities 1.0
-	var cleaned_body string
+	cleaned_body := req.Body
 	cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
 	cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
 	cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
