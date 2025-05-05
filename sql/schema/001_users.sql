@@ -1,17 +1,18 @@
 -- +goose Up
-CREATE TABLE Users (
-    id UUID,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
+CREATE TABLE IF NOT EXISTS Users (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
     email TEXT
 );
-CREATE TABLE Chirps (
-    id UUID,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    body TEXT,
-    user_id UUID
+CREATE TABLE IF NOT EXISTS Chirps (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    body TEXT NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- +goose Down
 DROP TABLE users;
+DROP TABLE chirps;

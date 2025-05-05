@@ -18,6 +18,6 @@ VALUES (
     NOW(),
     NOW(),
     $1,
-    $2
+    $2 
 )
 RETURNING *;

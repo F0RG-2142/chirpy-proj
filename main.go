@@ -10,8 +10,10 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/F0RG-2142/chirpy-proj/internal/database"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -114,24 +116,30 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 
 func chirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	//req struct
 	var req struct {
-		Body string `json:"body"`
-		userId string `json:"user_id":`
+		Body   string    `json:"body"`
+		UserId uuid.UUID `json:"user_id"`
 	}
+	//decode req
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
-	err := decoder.Decode(&req)
-	fmt.Println(req)
-	if err != nil {
+	if err := decoder.Decode(&req); err != nil {
 		log.Printf("Error decoding request: %v", err)
 		w.WriteHeader(500)
 		return
 	}
+	//response struct
 	type returnValues struct {
-		Body  string `json:"body"`
-		Err   string `json:"error"`
-		Valid bool   `json:"valid"`
+		Id        string    `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserId    string    `json:"user_id"`
+		Err       string    `json:"error"`
+		Valid     bool      `json:"valid"`
 	}
+
 	//If body too long (>140) return error
 	if len(req.Body) > 140 {
 		respBody := returnValues{
@@ -149,23 +157,37 @@ func chirp(w http.ResponseWriter, r *http.Request) {
 	}
 	//Clean profanities 1.0
 	var cleaned_body string
-	if strings.Contains(req.Body, "kerfuffle") || strings.Contains(req.Body, "sharbert") || strings.Contains(req.Body, "fornax") {
-		cleaned_body = req.Body
-		cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
-		cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
-		cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
+	//save chirp to db
+	params := database.NewChirpParams{
+		Body:   cleaned_body,
+		UserID: req.UserId,
 	}
+	chirp, err := Cfg.db.NewChirp(r.Context(), params)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		http.Error(w, `{"error":"Failed to create chirp"}`, http.StatusInternalServerError)
+		return
+	}
+
 	respBody := returnValues{
-		Body:  cleaned_body,
-		Valid: true,
+		Id:        chirp.ID.String(),
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserId:    chirp.UserID.String(),
+		Valid:     true,
 	}
+	//marshal and send reponse on successful creation
 	data, err := json.Marshal(respBody)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(500)
 		return
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusCreated)
 	w.Write(data)
 }
 
