@@ -47,9 +47,17 @@ func main() {
 	mux.Handle("POST /api/chirps", http.HandlerFunc(chirp))
 	mux.Handle("POST /api/users", http.HandlerFunc(newUser))
 	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
+	mux.Handle("GET /api/chirps", http.HandlerFunc(getChirps))
+	mux.Handle("GET /api/chirp", http.HandlerFunc(getChirp))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	server.ListenAndServe()
+}
+
+func getChirps(w http.ResponseWriter, r *http.Request) {
+}
+
+func getChirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func resetDb(w http.ResponseWriter, r *http.Request) {
