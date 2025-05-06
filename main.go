@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/F0RG-2142/chirpy-proj/internal/auth"
 	"github.com/F0RG-2142/chirpy-proj/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -46,11 +47,76 @@ func main() {
 	mux.Handle("POST /admin/reset", http.HandlerFunc(reset))
 	mux.Handle("POST /api/users", http.HandlerFunc(newUser))
 	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
+	mux.Handle("POST /api/login", http.HandlerFunc(login))
 	mux.Handle("POST /api/yaps", http.HandlerFunc(yaps))
 	mux.Handle("GET /api/yaps", http.HandlerFunc(getYaps))
+	mux.Handle("GET /api/yaps/{yapId}", http.HandlerFunc(getYap))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
+	fmt.Println("Listening on http://localhost:8080/")
 	server.ListenAndServe()
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	user, err := Cfg.db.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
+	}
+	err = auth.CheckPasswordHash(user.HashedPassword, req.Password)
+	if err != nil {
+
+		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
+	}
+	resp := struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, `{"error":"Failed to create response"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonResp)
+}
+
+func getYap(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id, err := uuid.Parse(r.URL.Query().Get("yapId"))
+	if err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+	}
+	yap, err := Cfg.db.GetYapByID(r.Context(), uuid.UUID(id))
+	if err != nil {
+		w.WriteHeader(404)
+		w.Write([]byte(err.Error()))
+	}
+	yapJSON, err := json.Marshal(yap)
+	if err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(yapJSON)
 }
 
 func getYaps(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +145,8 @@ func newUser(w http.ResponseWriter, r *http.Request) {
 	//decode request body
 	w.Header().Set("Content-Type", "application/json")
 	var req struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Error decoding request: %v", err)
@@ -88,10 +155,19 @@ func newUser(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	//validate email
+	//validate email and password
 	if req.Email == "" {
 		http.Error(w, `{"error":"Email is required"}`, http.StatusBadRequest)
 		return
+	}
+	if req.Password == "" {
+		http.Error(w, `{"error":"Password is required"}`, http.StatusBadRequest)
+		return
+	}
+	//hash passw
+	hashedPass, err := auth.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, `{"error":"Faileed to hash password"}`, http.StatusFailedDependency)
 	}
 	//check if db is initialized
 	if Cfg.db == nil {
@@ -100,7 +176,11 @@ func newUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//Create user and resepond with created user
-	user, err := Cfg.db.CreateUser(r.Context(), sql.NullString{String: req.Email, Valid: true})
+	params := database.CreateUserParams{
+		Email:          req.Email,
+		HashedPassword: hashedPass,
+	}
+	user, err := Cfg.db.CreateUser(r.Context(), params)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		http.Error(w, `{"error":"Failed to create user"}`, http.StatusInternalServerError)
