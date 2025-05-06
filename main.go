@@ -23,6 +23,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	secret         string
 }
 
 var Cfg apiConfig
@@ -30,14 +31,15 @@ var Cfg apiConfig
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
-	platform := os.Getenv("PLATFORM")
+	Cfg.platform = os.Getenv("PLATFORM")
+	Cfg.secret = os.Getenv("JWT_SECRET")
+
 	db, _ := sql.Open("postgres", dbURL)
 	defer db.Close()
 	if err := db.Ping(); err != nil {
 		log.Fatal("Failed to ping database:", err)
 	}
 	Cfg.db = database.New(db)
-	Cfg.platform = platform
 
 	mux := http.NewServeMux()
 	mux.Handle("/app/", http.StripPrefix("/app/", Cfg.middlewareMetricsInc(http.FileServer(http.Dir("./")))))
@@ -59,9 +61,14 @@ func main() {
 
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+	req := struct {
+		Email              string `json:"email"`
+		Password           string `json:"password"`
+		Expires_in_seconds int    `json:"expires_in_seconds"`
+	}{
+		Email:              "",
+		Password:           "",
+		Expires_in_seconds: 3600,
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -70,6 +77,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+	if req.Expires_in_seconds > 3600 {
+		req.Expires_in_seconds = 3600
+	}
 	user, err := Cfg.db.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
@@ -79,16 +89,23 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
 	}
+	Token, err := auth.MakeJWT(user.ID, Cfg.secret, time.Duration(req.Expires_in_seconds))
+	if err != nil {
+		http.Error(w, `{"error":"Failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
 	resp := struct {
 		ID        uuid.UUID `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
 		UpdatedAt time.Time `json:"updated_at"`
 		Email     string    `json:"email"`
+		Token     string    `json:"token"`
 	}{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+		Token:     Token,
 	}
 
 	jsonResp, err := json.Marshal(resp)
