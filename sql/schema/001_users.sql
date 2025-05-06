@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS Users (
     updated_at TIMESTAMP NOT NULL,
     email TEXT
 );
-CREATE TABLE IF NOT EXISTS Chirps (
+CREATE TABLE IF NOT EXISTS Yaps (
     id UUID PRIMARY KEY,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
@@ -14,5 +14,5 @@ CREATE TABLE IF NOT EXISTS Chirps (
 );
 
 -- +goose Down
-DROP TABLE users;
-DROP TABLE chirps;
+DROP TABLE users CASCADE;
+DROP TABLE yaps;

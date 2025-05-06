@@ -44,20 +44,27 @@ func main() {
 	mux.Handle("GET /api/healthz", Cfg.middlewareMetricsInc(http.HandlerFunc(readiness)))
 	mux.Handle("GET /admin/metrics", Cfg.middlewareMetricsInc(http.HandlerFunc(metrics)))
 	mux.Handle("POST /admin/reset", http.HandlerFunc(reset))
-	mux.Handle("POST /api/chirps", http.HandlerFunc(chirp))
 	mux.Handle("POST /api/users", http.HandlerFunc(newUser))
 	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
-	mux.Handle("GET /api/chirps", http.HandlerFunc(getChirps))
-	mux.Handle("GET /api/chirp", http.HandlerFunc(getChirp))
+	mux.Handle("POST /api/yaps", http.HandlerFunc(yaps))
+	mux.Handle("GET /api/yaps", http.HandlerFunc(getYaps))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	server.ListenAndServe()
 }
 
-func getChirps(w http.ResponseWriter, r *http.Request) {
-}
-
-func getChirp(w http.ResponseWriter, r *http.Request) {
+func getYaps(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	yaps, err := Cfg.db.GetAllYaps(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+	}
+	yapsJSON, err := json.Marshal(yaps)
+	if err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(yapsJSON)
 }
 
 func resetDb(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +129,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func chirp(w http.ResponseWriter, r *http.Request) {
+func yaps(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	//req struct
 	var req struct {
@@ -169,11 +176,11 @@ func chirp(w http.ResponseWriter, r *http.Request) {
 	cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
 	cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
 	//save chirp to db
-	params := database.NewChirpParams{
+	params := database.NewYapParams{
 		Body:   cleaned_body,
 		UserID: req.UserId,
 	}
-	chirp, err := Cfg.db.NewChirp(r.Context(), params)
+	chirp, err := Cfg.db.NewYap(r.Context(), params)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		http.Error(w, `{"error":"Failed to create chirp"}`, http.StatusInternalServerError)

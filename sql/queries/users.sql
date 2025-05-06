@@ -11,8 +11,8 @@ RETURNING *;
 -- name: DeleteAllUsers :exec
 DELETE FROM users;
 
--- name: NewChirp :one
-INSERT INTO chirps (id, created_at, updated_at, body, user_id)
+-- name: NewYap :one
+INSERT INTO yaps (id, created_at, updated_at, body, user_id)
 VALUES (
     gen_random_uuid (),
     NOW(),
@@ -21,3 +21,6 @@ VALUES (
     $2 
 )
 RETURNING *;
+
+-- name: GetAllYaps :many
+SELECT * FROM yaps ORDER BY created_at ASC;
