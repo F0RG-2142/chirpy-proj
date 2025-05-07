@@ -251,6 +251,19 @@ func yaps(w http.ResponseWriter, r *http.Request) {
 		Err       string    `json:"error"`
 		Valid     bool      `json:"valid"`
 	}
+	//get bearer token
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+	}
+	//validate token
+	user_id, err := auth.ValidateJWT(token, Cfg.secret)
+	if err != nil{
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	if user_id != req.UserId {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
 
 	//If body too long (>140) return error
 	if len(req.Body) > 140 {

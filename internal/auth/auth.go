@@ -25,13 +25,22 @@ func CheckPasswordHash(hash, password string) error {
 }
 
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
+	if tokenSecret == "" {
+		return "", fmt.Errorf("no secret entered")
+	}
+	if len(tokenSecret) < 32 {
+		return "", fmt.Errorf("enter a secure secret(minimum 32 bytes)")
+	}
+	if expiresIn < time.Duration(1) {
+		expiresIn = time.Duration(1)
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "yappy",
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiresIn)),
 		Subject:   userID.String(),
 	})
-	wt, err := token.SignedString(tokenSecret)
+	wt, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
@@ -63,7 +72,7 @@ func GetBearerToken(headers http.Header) (string, error) {
 	authHeader := headers.Get("Authorization")
 	if authHeader == "" {
 		return "", fmt.Errorf("no auth token provided")
-    }
+	}
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	return tokenString, nil
 }
