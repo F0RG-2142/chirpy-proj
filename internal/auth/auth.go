@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,9 +32,6 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	}
 	if len(tokenSecret) < 32 {
 		return "", fmt.Errorf("enter a secure secret(minimum 32 bytes)")
-	}
-	if expiresIn < time.Duration(1) {
-		expiresIn = time.Duration(1)
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "yappy",
@@ -75,4 +74,14 @@ func GetBearerToken(headers http.Header) (string, error) {
 	}
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	return tokenString, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	randomBytes := make([]byte, 32)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(randomBytes)
+	return token, nil
 }

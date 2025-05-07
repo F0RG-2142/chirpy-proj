@@ -13,7 +13,16 @@ CREATE TABLE IF NOT EXISTS Yaps (
     body TEXT NOT NULL,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    token TEXT PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at  TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP
+);
 
 -- +goose Down
 DROP TABLE users CASCADE;
 DROP TABLE yaps;
+DROP TABLE refresh_tokens;

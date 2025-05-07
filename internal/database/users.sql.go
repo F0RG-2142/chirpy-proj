@@ -83,6 +83,24 @@ func (q *Queries) GetAllYaps(ctx context.Context) ([]Yap, error) {
 	return items, nil
 }
 
+const getRefreshToken = `-- name: GetRefreshToken :one
+SELECT token, created_at, updated_at, user_id, expires_at, revoked_at FROM refresh_tokens WHERE token = $1
+`
+
+func (q *Queries) GetRefreshToken(ctx context.Context, token string) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, getRefreshToken, token)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, created_at, updated_at, email, hashed_password FROM users WHERE email = $1
 `
@@ -113,6 +131,38 @@ func (q *Queries) GetYapByID(ctx context.Context, id uuid.UUID) (Yap, error) {
 		&i.UpdatedAt,
 		&i.Body,
 		&i.UserID,
+	)
+	return i, err
+}
+
+const newRefreshToken = `-- name: NewRefreshToken :one
+INSERT INTO refresh_tokens (token, created_at, updated_at, user_id, expires_at, revoked_at)
+VALUES (
+    $1,
+    NOW(),
+    NOW(),
+    $2,
+    NOW() + INTERTVAL '60 days',
+    NULL
+)
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
+`
+
+type NewRefreshTokenParams struct {
+	Token  string
+	UserID uuid.UUID
+}
+
+func (q *Queries) NewRefreshToken(ctx context.Context, arg NewRefreshTokenParams) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, newRefreshToken, arg.Token, arg.UserID)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
