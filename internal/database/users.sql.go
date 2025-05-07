@@ -196,3 +196,17 @@ func (q *Queries) NewYap(ctx context.Context, arg NewYapParams) (Yap, error) {
 	)
 	return i, err
 }
+
+const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
+UPDATE refresh_tokens
+SET
+    updated_at = NOW(),
+    revoked_at = NOW()
+WHERE
+    token = $1
+`
+
+func (q *Queries) RevokeRefreshToken(ctx context.Context, token string) error {
+	_, err := q.db.ExecContext(ctx, revokeRefreshToken, token)
+	return err
+}

@@ -54,13 +54,34 @@ func main() {
 	mux.Handle("GET /api/yaps", http.HandlerFunc(getYaps))
 	mux.Handle("GET /api/yaps/{yapId}", http.HandlerFunc(getYap))
 	mux.Handle("POST /api/refresh", http.HandlerFunc(refresh))
+	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	fmt.Println("Listening on http://localhost:8080/")
 	server.ListenAndServe()
 }
 
-func refresh(w http.ResponseWriter, r *http.Request){
+func revoke(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		return
+	}
+	refreshToken, err := Cfg.db.GetRefreshToken(r.Context(), token)
+	if err != nil {
+		log.Printf("Error fetching refresh token: %v", err)
+		http.Error(w, `{"error":"Invalid refresh token"}`, http.StatusUnauthorized)
+		return
+	}
+	err = Cfg.db.RevokeRefreshToken(r.Context(), refreshToken.Token)
+	if err != nil {
+		http.Error(w, `"error":"Could not revoke Refresh Token"`, http.StatusFailedDependency)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func refresh(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
@@ -81,7 +102,7 @@ func refresh(w http.ResponseWriter, r *http.Request){
 		http.Error(w, `{"error":"Refresh token is expired"}`, http.StatusUnauthorized)
 		return
 	}
-	tokenSecret := os.Getenv("JWT_SECRET")
+	tokenSecret := Cfg.secret
 	if tokenSecret == "" {
 		log.Println("JWT_SECRET not set")
 		http.Error(w, `{"error":"Server configuration error"}`, http.StatusInternalServerError)
@@ -94,7 +115,7 @@ func refresh(w http.ResponseWriter, r *http.Request){
 		return
 	}
 	resp := struct {
-		AccessToken string `json:"access_token"`
+		AccessToken string `json:"token"`
 	}{
 		AccessToken: accessToken,
 	}
@@ -111,6 +132,7 @@ func refresh(w http.ResponseWriter, r *http.Request){
 
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	//parse req
 	req := struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -125,6 +147,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+	//verify usern and passw
 	user, err := Cfg.db.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
@@ -134,14 +157,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		http.Error(w, `{"error":"Incorrect username or password"}`, http.StatusBadRequest)
 	}
+	//make jwt
 	Token, err := auth.MakeJWT(user.ID, Cfg.secret, time.Hour)
 	if err != nil {
-		http.Error(w, `{"error":"Failed to generate token"}`, http.StatusInternalServerError)
+		log.Printf("Error generating JWT for user %q: %v", user.ID, err)
+		http.Error(w, `{"error":"Failed to generate access token"}`, http.StatusInternalServerError)
 		return
 	}
 	refreshToken, _ := auth.MakeRefreshToken()
 	params := database.NewRefreshTokenParams{
-		Token: refreshToken,
+		Token:  refreshToken,
 		UserID: user.ID,
 	}
 	Cfg.db.NewRefreshToken(r.Context(), params)
