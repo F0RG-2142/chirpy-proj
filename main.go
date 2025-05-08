@@ -55,10 +55,77 @@ func main() {
 	mux.Handle("GET /api/yaps/{yapId}", http.HandlerFunc(getYap))
 	mux.Handle("POST /api/refresh", http.HandlerFunc(refresh))
 	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
+	mux.Handle("PUT /api/users", http.HandlerFunc(update))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	fmt.Println("Listening on http://localhost:8080/")
 	server.ListenAndServe()
+}
+
+func update(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	//get auth token and validate
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	user_id, err := auth.ValidateJWT(token, Cfg.secret)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		return
+	}
+	//decode request
+	req := struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{
+		Email:    "",
+		Password: "",
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	//hash passw and update user
+	hashed_pass, err := auth.HashPassword(req.Password)
+	if err != nil {
+
+	}
+	params := database.UpdateUserParams{
+		Email:          req.Email,
+		HashedPassword: hashed_pass,
+		ID:             user_id,
+	}
+	err = Cfg.db.UpdateUser(r.Context(), params)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
+		return
+	}
+	user, err := Cfg.db.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
+		return
+	}
+	resp := struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, `{"error":"Failed to create response"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonResp)
 }
 
 func revoke(w http.ResponseWriter, r *http.Request) {
