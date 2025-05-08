@@ -73,3 +73,6 @@ SET
     has_yappy_premium = 'true'
 WHERE
     id = $1;
+
+-- name: GetYapsByAuthor :many
+SELECT * FROM yaps WHERE user_id = $1;

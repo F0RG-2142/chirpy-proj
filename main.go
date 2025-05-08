@@ -51,12 +51,12 @@ func main() {
 	mux.Handle("POST /api/reset", http.HandlerFunc(resetDb))
 	mux.Handle("POST /api/login", http.HandlerFunc(login))
 	mux.Handle("POST /api/yaps", http.HandlerFunc(yaps))
-	mux.Handle("GET /api/yaps", http.HandlerFunc(getYaps))
+	mux.Handle("GET /api/yaps/{authorId}", http.HandlerFunc(getYaps))
 	mux.Handle("GET /api/yaps/{yapId}", http.HandlerFunc(getYap))
 	mux.Handle("POST /api/refresh", http.HandlerFunc(refresh))
 	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
 	mux.Handle("PUT /api/users", http.HandlerFunc(update))
-	mux.Handle("DELETE /api/chirps/{chirpID}", http.HandlerFunc(deleteYap))
+	mux.Handle("DELETE /api/chirps/{yapID}", http.HandlerFunc(deleteYap))
 	mux.Handle("POST /api/payment_platform/webhooks", http.HandlerFunc(payment))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
@@ -114,18 +114,12 @@ func deleteYap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
 		return
 	}
-	//decode request
-	req := struct {
-		YapID uuid.UUID `json:"id"`
-	}{
-		YapID: uuid.Nil,
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v", err)
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+	id, err := uuid.Parse(r.URL.Query().Get("yapId"))
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
-	yap, err := Cfg.db.GetYapByID(r.Context(), req.YapID)
+	yap, err := Cfg.db.GetYapByID(r.Context(), id)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
 		return
@@ -369,10 +363,26 @@ func getYap(w http.ResponseWriter, r *http.Request) {
 
 func getYaps(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	yaps, err := Cfg.db.GetAllYaps(r.Context())
+	var yaps []database.Yap
+	id, err := uuid.Parse(r.URL.Query().Get("authorId"))
 	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
+		http.Error(w, "Could not parse uuid", http.StatusBadRequest)
+		return
 	}
+	if id != uuid.Nil {
+		yaps, err = Cfg.db.GetYapsByAuthor(r.Context(), id)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+	} else {
+		yaps, err = Cfg.db.GetAllYaps(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+	}
+
 	yapsJSON, err := json.Marshal(yaps)
 	if err != nil {
 		w.WriteHeader(http.StatusFailedDependency)

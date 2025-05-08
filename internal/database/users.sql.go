@@ -146,6 +146,39 @@ func (q *Queries) GetYapByID(ctx context.Context, id uuid.UUID) (Yap, error) {
 	return i, err
 }
 
+const getYapsByAuthor = `-- name: GetYapsByAuthor :many
+SELECT id, created_at, updated_at, body, user_id FROM yaps WHERE user_id = $1
+`
+
+func (q *Queries) GetYapsByAuthor(ctx context.Context, userID uuid.UUID) ([]Yap, error) {
+	rows, err := q.db.QueryContext(ctx, getYapsByAuthor, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Yap
+	for rows.Next() {
+		var i Yap
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Body,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const givePremium = `-- name: GivePremium :exec
 UPDATE users
 SET 
