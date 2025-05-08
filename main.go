@@ -56,10 +56,15 @@ func main() {
 	mux.Handle("POST /api/refresh", http.HandlerFunc(refresh))
 	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
 	mux.Handle("PUT /api/users", http.HandlerFunc(update))
+	mux.Handle("DELETE /api/chirps/{chirpID}", http.HandlerFunc(deleteYap))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	fmt.Println("Listening on http://localhost:8080/")
 	server.ListenAndServe()
+}
+
+func deleteYap(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func update(w http.ResponseWriter, r *http.Request) {
@@ -103,11 +108,13 @@ func update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
 		return
 	}
+	//get updated user
 	user, err := Cfg.db.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
 		return
 	}
+	//create response struct, marshal, and respond
 	resp := struct {
 		ID        uuid.UUID `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
