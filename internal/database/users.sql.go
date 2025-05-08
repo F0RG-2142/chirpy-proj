@@ -147,7 +147,7 @@ func (q *Queries) GetYapByID(ctx context.Context, id uuid.UUID) (Yap, error) {
 }
 
 const getYapsByAuthor = `-- name: GetYapsByAuthor :many
-SELECT id, created_at, updated_at, body, user_id FROM yaps WHERE user_id = $1
+SELECT id, created_at, updated_at, body, user_id FROM yaps WHERE user_id = $1 ORDER BY created_at ASC
 `
 
 func (q *Queries) GetYapsByAuthor(ctx context.Context, userID uuid.UUID) ([]Yap, error) {

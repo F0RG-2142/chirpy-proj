@@ -75,4 +75,4 @@ WHERE
     id = $1;
 
 -- name: GetYapsByAuthor :many
-SELECT * FROM yaps WHERE user_id = $1;
+SELECT * FROM yaps WHERE user_id = $1 ORDER BY created_at ASC;
