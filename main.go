@@ -523,9 +523,9 @@ func yaps(w http.ResponseWriter, r *http.Request) {
 	}
 	//Clean profanities 1.0
 	cleaned_body := req.Body
-	cleaned_body = strings.Replace(cleaned_body, "kerfuffle", "****", -1)
-	cleaned_body = strings.Replace(cleaned_body, "sharbert", "****", -1)
-	cleaned_body = strings.Replace(cleaned_body, "fornax", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "Lol", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "fortnite", "****", -1)
+	cleaned_body = strings.Replace(cleaned_body, "damn", "****", -1)
 	//save chirp to db
 	params := database.NewYapParams{
 		Body:   cleaned_body,
