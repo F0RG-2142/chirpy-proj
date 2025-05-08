@@ -50,6 +50,15 @@ func (q *Queries) DeleteAllUsers(ctx context.Context) error {
 	return err
 }
 
+const deleteYap = `-- name: DeleteYap :exec
+DELETE FROM yaps WHERE id = $1
+`
+
+func (q *Queries) DeleteYap(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteYap, id)
+	return err
+}
+
 const getAllYaps = `-- name: GetAllYaps :many
 SELECT id, created_at, updated_at, body, user_id FROM yaps ORDER BY created_at ASC
 `

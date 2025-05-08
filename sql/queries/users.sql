@@ -63,3 +63,6 @@ SET
     hashed_password= $2
 WHERE
     id = $3;
+
+-- name: DeleteYap :exec
+DELETE FROM yaps WHERE id = $1;

@@ -64,12 +64,7 @@ func main() {
 }
 
 func deleteYap(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	//get auth token and validate
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
@@ -77,7 +72,48 @@ func update(w http.ResponseWriter, r *http.Request) {
 	}
 	user_id, err := auth.ValidateJWT(token, Cfg.secret)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
+		return
+	}
+	//decode request
+	req := struct {
+		YapID uuid.UUID `json:"id"`
+	}{
+		YapID: uuid.Nil,
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	yap, err := Cfg.db.GetYapByID(r.Context(), req.YapID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+		return
+	}
+	if yap.UserID != user_id {
+		http.Error(w, "This is not your yap", http.StatusForbidden)
+		return
+	}
+	err = Cfg.db.DeleteYap(r.Context(), yap.ID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func update(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	//get and validate auth token
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	user_id, err := auth.ValidateJWT(token, Cfg.secret)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
 		return
 	}
 	//decode request
@@ -139,13 +175,13 @@ func revoke(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
 		return
 	}
 	refreshToken, err := Cfg.db.GetRefreshToken(r.Context(), token)
 	if err != nil {
 		log.Printf("Error fetching refresh token: %v", err)
-		http.Error(w, `{"error":"Invalid refresh token"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"Invalid refresh token"}`, http.StatusForbidden)
 		return
 	}
 	err = Cfg.db.RevokeRefreshToken(r.Context(), refreshToken.Token)
@@ -159,21 +195,21 @@ func refresh(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusForbidden)
 		return
 	}
 	refreshToken, err := Cfg.db.GetRefreshToken(r.Context(), token)
 	if err != nil {
 		log.Printf("Error fetching refresh token: %v", err)
-		http.Error(w, `{"error":"Invalid refresh token"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"Invalid refresh token"}`, http.StatusForbidden)
 		return
 	}
 	if !refreshToken.RevokedAt.Valid {
-		http.Error(w, `{"error":"Refresh token is revoked"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"Refresh token is revoked"}`, http.StatusForbidden)
 		return
 	}
 	if time.Now().After(refreshToken.ExpiresAt) {
-		http.Error(w, `{"error":"Refresh token is expired"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"Refresh token is expired"}`, http.StatusForbidden)
 		return
 	}
 	tokenSecret := Cfg.secret
@@ -411,10 +447,10 @@ func yaps(w http.ResponseWriter, r *http.Request) {
 	//validate token
 	user_id, err := auth.ValidateJWT(token, Cfg.secret)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(http.StatusForbidden)
 	}
 	if user_id != req.UserId {
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(http.StatusForbidden)
 	}
 
 	//If body too long (>140) return error
