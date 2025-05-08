@@ -57,10 +57,42 @@ func main() {
 	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
 	mux.Handle("PUT /api/users", http.HandlerFunc(update))
 	mux.Handle("DELETE /api/chirps/{chirpID}", http.HandlerFunc(deleteYap))
+	mux.Handle("POST /api/ozow/webhooks", http.HandlerFunc(payment))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	fmt.Println("Listening on http://localhost:8080/")
 	server.ListenAndServe()
+}
+
+func payment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	req := struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserId uuid.UUID `json:"user_id"`
+		} `json:"data"`
+	}{
+		Event: "",
+		Data: struct {
+			UserId uuid.UUID `json:"user_id"`
+		}{
+			UserId: uuid.Nil,
+		},
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v", err)
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Event != "user.upgraded" {
+		http.Error(w, "", http.StatusNoContent)
+	}
+
+	err := Cfg.db.GivePremium(r.Context(), req.Data.UserId)
+	if err != nil {
+		http.Error(w, "User Not Found", http.StatusNotFound)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func deleteYap(w http.ResponseWriter, r *http.Request) {
@@ -152,15 +184,17 @@ func update(w http.ResponseWriter, r *http.Request) {
 	}
 	//create response struct, marshal, and respond
 	resp := struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
+		ID                uuid.UUID `json:"id"`
+		CreatedAt         time.Time `json:"created_at"`
+		UpdatedAt         time.Time `json:"updated_at"`
+		Email             string    `json:"email"`
+		Has_yappy_premium bool      `json:"has_yappy_premium"`
 	}{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:                user.ID,
+		CreatedAt:         user.CreatedAt,
+		UpdatedAt:         user.UpdatedAt,
+		Email:             user.Email,
+		Has_yappy_premium: user.HasYappyPremium,
 	}
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
@@ -281,19 +315,21 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 	Cfg.db.NewRefreshToken(r.Context(), params)
 	resp := struct {
-		ID           uuid.UUID `json:"id"`
-		CreatedAt    time.Time `json:"created_at"`
-		UpdatedAt    time.Time `json:"updated_at"`
-		Email        string    `json:"email"`
-		Token        string    `json:"token"`
-		RefreshToken string    `json:"refresh_token"`
+		ID                uuid.UUID `json:"id"`
+		CreatedAt         time.Time `json:"created_at"`
+		UpdatedAt         time.Time `json:"updated_at"`
+		Email             string    `json:"email"`
+		Token             string    `json:"token"`
+		RefreshToken      string    `json:"refresh_token"`
+		Has_yappy_premium bool      `json:"has_yappy_premium"`
 	}{
-		ID:           user.ID,
-		CreatedAt:    user.CreatedAt,
-		UpdatedAt:    user.UpdatedAt,
-		Email:        user.Email,
-		Token:        Token,
-		RefreshToken: refreshToken,
+		ID:                user.ID,
+		CreatedAt:         user.CreatedAt,
+		UpdatedAt:         user.UpdatedAt,
+		Email:             user.Email,
+		Token:             Token,
+		RefreshToken:      refreshToken,
+		Has_yappy_premium: user.HasYappyPremium,
 	}
 
 	jsonResp, err := json.Marshal(resp)

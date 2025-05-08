@@ -66,3 +66,10 @@ WHERE
 
 -- name: DeleteYap :exec
 DELETE FROM yaps WHERE id = $1;
+
+-- name: GivePremium :exec
+UPDATE users
+SET 
+    has_yappy_premium = 'true'
+WHERE
+    id = $1;

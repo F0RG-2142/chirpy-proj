@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS Users (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     email TEXT NOT NULL,
-    hashed_password TEXT NOT NULL DEFAULT 'unset' 
+    hashed_password TEXT NOT NULL DEFAULT 'unset',
+    has_yappy_premium BOOL NOT NULL DEFAULT 'false'
 );
 CREATE TABLE IF NOT EXISTS Yaps (
     id UUID PRIMARY KEY,
