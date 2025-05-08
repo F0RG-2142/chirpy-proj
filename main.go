@@ -57,7 +57,7 @@ func main() {
 	mux.Handle("POST /api/revoke", http.HandlerFunc(revoke))
 	mux.Handle("PUT /api/users", http.HandlerFunc(update))
 	mux.Handle("DELETE /api/chirps/{chirpID}", http.HandlerFunc(deleteYap))
-	mux.Handle("POST /api/ozow/webhooks", http.HandlerFunc(payment))
+	mux.Handle("POST /api/payment_platform/webhooks", http.HandlerFunc(payment))
 
 	server := &http.Server{Handler: mux, Addr: ":8080"}
 	fmt.Println("Listening on http://localhost:8080/")
@@ -66,6 +66,13 @@ func main() {
 
 func payment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusFailedDependency)
+	}
+	if apiKey != os.Getenv("PP_KEY") {
+		http.Error(w, "Unauthorized Endpoint", http.StatusUnauthorized)
+	}
 	req := struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -88,7 +95,7 @@ func payment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusNoContent)
 	}
 
-	err := Cfg.db.GivePremium(r.Context(), req.Data.UserId)
+	err = Cfg.db.GivePremium(r.Context(), req.Data.UserId)
 	if err != nil {
 		http.Error(w, "User Not Found", http.StatusNotFound)
 	}

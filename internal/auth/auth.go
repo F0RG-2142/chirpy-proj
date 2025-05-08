@@ -13,6 +13,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("no auth token provided")
+	}
+	apiKey := strings.TrimPrefix(authHeader, "ApiKey ")
+	return apiKey, nil
+}
+
 func HashPassword(password string) (string, error) {
 	hashPass, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
